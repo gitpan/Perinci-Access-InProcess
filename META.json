@@ -1,0 +1,64 @@
+{
+   "abstract" : "Use Rinci access protocol (Riap) to access Perl code",
+   "author" : [
+      "Steven Haryanto <stevenharyanto@gmail.com>"
+   ],
+   "dynamic_config" : 0,
+   "generated_by" : "Dist::Zilla version 4.300006, CPAN::Meta::Converter version 2.113640",
+   "license" : [
+      "perl_5"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "Perinci-Access-InProcess",
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "Module::Build" : "0.3601"
+         }
+      },
+      "configure" : {
+         "requires" : {
+            "Module::Build" : "0.3601"
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "Class::Inspector" : 0,
+            "Log::Any" : 0,
+            "Module::List" : 0,
+            "Perinci::Access::Base" : 0,
+            "Perinci::MetaAccessor::Default" : 0,
+            "Perinci::Sub::Wrapper" : "0.25",
+            "Perinci::Tx::Manager" : 0,
+            "Perinci::Util" : 0,
+            "Riap" : "v1.1.14",
+            "Rinci" : "v1.1.22",
+            "SHARYANTO::Package::Util" : 0,
+            "Tie::Cache" : 0,
+            "URI" : 0,
+            "perl" : "5.010001"
+         }
+      },
+      "test" : {
+         "requires" : {
+            "File::chdir" : 0,
+            "Perinci::Examples" : "0.08",
+            "Perinci::Sub::Gen::Undoable" : "0.20",
+            "Setup::File::Symlink" : 0,
+            "Test::More" : "0.96"
+         }
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "homepage" : "http://metacpan.org/release/Perinci-Access-InProcess",
+      "repository" : {
+         "url" : "http://github.com/sharyanto/perl-Perinci-Access-InProcess"
+      }
+   },
+   "version" : "0.28"
+}
+

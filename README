@@ -1,0 +1,186 @@
+NAME
+    Perinci::Access::InProcess - Use Rinci access protocol (Riap) to access
+    Perl code
+
+VERSION
+    version 0.28
+
+SYNOPSIS
+     # in Your/Module.pm
+
+     package My::Module;
+     our %SPEC;
+
+     $SPEC{mult2} = {
+         v => 1.1,
+         summary => 'Multiple two numbers',
+         args => {
+             a => { schema=>'float*', req=>1, pos=>0 },
+             b => { schema=>'float*', req=>1, pos=>1 },
+         },
+         examples => [
+             {args=>{a=>2, b=>3}, result=>6},
+         ],
+     };
+     sub mult2 {
+         my %args = @_;
+         [200, "OK", $args{a} * $args{b}];
+     }
+
+     $SPEC{multn} = {
+         v => 1.1,
+         summary => 'Multiple many numbers',
+         args => {
+             n => { schema=>[array=>{of=>'float*'}], req=>1, pos=>0, greedy=>1 },
+         },
+     };
+     sub multn {
+         my %args = @_;
+         my @n = @{$args{n}};
+         my $res = 0;
+         if (@n) {
+             $res = shift(@n);
+             $res *= $_ while $_ = shift(@n);
+         }
+         return [200, "OK", $res];
+     }
+
+     1;
+
+     # in another file
+
+     use Perinci::Access::InProcess;
+     my $pa = Perinci::Access::Process->new();
+
+     # list all functions in package
+     my $res = $pa->request(list => '/My/Module/', {type=>'function'});
+     # -> [200, "OK", ['/My/Module/mult2', '/My/Module/multn']]
+
+     # call function
+     my $res = $pa->request(call => '/My/Module/mult2', {args=>{a=>2, b=>3}});
+     # -> [200, "OK", 6]
+
+     # get function metadata
+     $res = $pa->request(meta => '/Foo/Bar/multn');
+     # -> [200, "OK", {v=>1.1, summary=>'Multiple many numbers', ...}]
+
+DESCRIPTION
+    This class implements Rinci access protocol (Riap) to access local Perl
+    code. This might seem like a long-winded and slow way to access things
+    that are already accessible from Perl like functions and metadata (in
+    %SPEC). Indeed, if you do not need Riap, you can access your module just
+    like any normal Perl module.
+
+    But Perinci::Access::InProcess offers several benefits:
+
+    *   Custom location of metadata
+
+        Metadata can be placed not in %SPEC but elsewhere, like in another
+        file or even database, or even by merging from several sources.
+
+    *   Function wrapping
+
+        Can be used to convert argument passing style or produce result
+        envelope, so you get a consistent interface.
+
+    *   Transaction/undo
+
+        This class implements Riap::Transaction. See
+        Perinci::Access::InProcess::Tx for more details.
+
+  Location of metadata
+    By default, the metadata should be put in %SPEC package variable, in a
+    key with the same name as the URI path leaf (use ":package" for the
+    package itself). For example, metadata for "/Foo/Bar/$var" should be put
+    in $Foo::Bar::SPEC{'$var'}, "/Foo/Bar/" in $Foo::Bar::SPEC{':package'}.
+    The metadata for the top-level namespace ("/") should be put in
+    $main::SPEC{':package'}.
+
+    If you want to put metadata elsewhere, you can pass "meta_accessor" =>
+    'Custom_Class' to constructor argument, or set this in your module:
+
+     our $PERINCI_META_ACCESSOR = 'Custom::Class';
+
+    The default accessor class is Perinci::MetaAccessor::Default.
+    Alternatively, you can simply devise your own system to retrieve
+    metadata which you can put in %SPEC at the end.
+
+METHODS
+  PKG->new(%attrs) => OBJ
+    Instantiate object. Known attributes:
+
+    *   meta_accessor => STR (default 'Perinci::MetaAccessor::Default')
+
+    *   load => BOOL (default 1)
+
+        Whether attempt to load modules using "require".
+
+    *   after_load => CODE
+
+        If set, code will be executed the first time Perl module is
+        successfully loaded.
+
+    *   extra_wrapper_args => HASH
+
+        If set, will be passed to Perinci::Sub::Wrapper's wrap_sub() when
+        wrapping subroutines.
+
+        Some applications of this include: adding "timeout" or
+        "result_postfilter" properties to functions.
+
+    *   extra_wrapper_convert => HASH
+
+        If set, will be passed to Perinci::Sub::Wrapper wrap_sub()'s
+        "convert" argument when wrapping subroutines.
+
+        Some applications of this include: changing "default_lang" of
+        metadata.
+
+    *   use_tx => BOOL (default 0)
+
+        Whether to allow transaction requests from client. Since this can
+        cause the server to store transaction/undo data, this must be
+        explicitly allowed.
+
+    *   custom_tx_manager => STR|CODE
+
+        Can be set to a string (class name) or a code that is expected to
+        return a transaction manager class.
+
+        By default, Perinci::Tx::Manager is instantiated and maintained (not
+        reinstantiated on every request), but if "custom_tx_manager" is a
+        coderef, it will be called on each request to get transaction
+        manager.
+
+        This can be used to instantiate Perinci::Tx::Manager in a custom
+        way, e.g. specifying per-user transaction data directory and limits,
+        which needs to be done on a per-request basis.
+
+  $pa->request($action => $server_url, \%extra) => $res
+    Process Riap request and return enveloped result. $server_url will be
+    used as the Riap request key 'uri', as there is no server in this case.
+
+    Some notes:
+
+    *   Metadata returned by the 'meta' action has normalized schemas in
+        them
+
+        Schemas in metadata (like in the "args" and "return" property) are
+        normalized by Perinci::Sub::Wrapper.
+
+FAQ
+  Why %SPEC?
+    The name was first chosen when during Sub::Spec era, so it stuck.
+
+SEE ALSO
+    Riap, Rinci
+
+AUTHOR
+    Steven Haryanto <stevenharyanto@gmail.com>
+
+COPYRIGHT AND LICENSE
+    This software is copyright (c) 2012 by Steven Haryanto.
+
+    This is free software; you can redistribute it and/or modify it under
+    the same terms as the Perl 5 programming language system itself.
+
