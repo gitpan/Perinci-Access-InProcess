@@ -12,7 +12,7 @@ use Scalar::Util qw(blessed reftype);
 use SHARYANTO::Package::Util qw(package_exists);
 use URI;
 
-our $VERSION = '0.28'; # VERSION
+our $VERSION = '0.29'; # VERSION
 
 our $re_mod = qr/\A[A-Za-z_][A-Za-z_0-9]*(::[A-Za-z_][A-Za-z_0-9]*)*\z/;
 
@@ -364,12 +364,12 @@ sub action_call {
 
     my $res;
 
-    my $tx; # = does client mention tx_id?
-    if ($req->{tx_id}) {
+    my $tm; # = does client mention tx_id?
+    if (defined $req->{tx_id}) {
         $res = $self->_pre_tx_action($req);
         return $res if $res;
-        $tx = $self->{_tx};
-        $tx->{_tx_id} = $req->{tx_id};
+        $tm = $self->{_tx_manager};
+        $tm->{_tx_id} = $req->{tx_id};
     }
 
     $res = $self->_get_code_and_meta($req);
@@ -383,48 +383,21 @@ sub action_call {
 
     # even if client doesn't mention tx_id, some function still needs
     # -undo_trash_dir under dry_run for testing (e.g. setup_symlink()).
-    if (!$tx && $ftx && $dry && !$args{-undo_trash_dir}) {
-        if ($self->{_tx}) {
-            $res = $self->{_tx}->get_trash_dir;
+    if (!defined($req->{tx_id}) && $ftx && $dry && !$args{-undo_trash_dir}) {
+        if ($tm) {
+            $res = $tm->get_trash_dir;
             $args{-undo_trash_dir} = $res->[2]; # XXX if error?
         } else {
             $args{-undo_trash_dir} = "/tmp"; # TMP
         }
     }
 
-    if ($tx) {
-
-        # if function features does not qualify in transaction, this constitutes
-        # an error and should cause a rollback
-        unless (
-            ($ftx && $ff->{undo} && $ff->{idempotent}) ||
-                $ff->{pure} ||
-                    ($ff->{dry_run} && $args{-dry_run})) {
-            my $rbres = $tx->rollback;
-            return [412, "Can't call this function using transaction".
-                        ($rbres->[0] == 200 ?
-                             " (rollbacked)" : " (rollback failed)")];
-        }
-        $args{-tx_manager} = $tx;
-        $args{-undo_action} //= 'do' if $ftx;
+    if ($tm) {
+        $res = $tm->call(f => "$req->{-module}::$req->{-leaf}", args=>\%args);
+        $tm->{_tx_id} = undef if $tm;
+    } else {
+        $res = $code->(%args);
     }
-
-    $res = $code->(%args);
-
-    if ($tx) {
-        if ($res->[0] =~ /^(?:200|304)$/) {
-            # suppress undo_data from function, as per Riap::Tx spec
-            delete $res->[3]{undo_data} if $res->[3];
-        } else {
-            # if function returns non-success, this also constitutes an error in
-            # transaction and should cause a rollback
-            my $rbres = $tx->rollback;
-            $res->[1] .= $rbres->[0] == 200 ?
-                " (rollbacked)" : " (rollback failed)";
-        }
-    }
-
-    $tx->{_tx_id} = undef if $tx;
 
     $res;
 }
@@ -556,20 +529,25 @@ sub _pre_tx_action {
     # instantiate custom tx manager, per request if necessary
     if ((reftype($self->{custom_tx_manager}) // '') eq 'CODE') {
         eval {
-            $self->{_tx} = $self->{custom_tx_manager}->($self);
-            die $self->{_tx} unless blessed($self->{_tx});
+            $self->{_tx_manager} = $self->{custom_tx_manager}->($self);
+            die $self->{_tx_manager} unless blessed($self->{_tx_manager});
         };
-        return [500, "Can't initialize custom tx manager: $self->{_tx}: $@"]
-            if $@;
-    } elsif (!blessed($self->{_tx})) {
-        my $txm_cl = $self->{custom_tx_manager} // "Perinci::Tx::Manager";
-        my $txm_cl_p = $txm_cl; $txm_cl_p =~ s!::!/!g; $txm_cl_p .= ".pm";
+        return [500, "Can't initialize custom tx manager: ".
+                    "$self->{_tx_manager}: $@"] if $@;
+    } elsif (!blessed($self->{_tx_manager})) {
+        my $tm_cl = $self->{custom_tx_manager} // "Perinci::Tx::Manager";
+        my $tm_cl_p = $tm_cl; $tm_cl_p =~ s!::!/!g; $tm_cl_p .= ".pm";
         eval {
-            require $txm_cl_p;
-            $self->{_tx} = $txm_cl->new(pa => $self);
-            die $self->{_tx} unless blessed($self->{_tx});
+            require $tm_cl_p;
+            $self->{_tx_manager} = $tm_cl->new(pa => $self);
+            die $self->{_tx_manager} unless blessed($self->{_tx_manager});
         };
-        return [500, "Can't initialize tx manager ($txm_cl): $@"] if $@;
+        return [500, "Can't initialize tx manager ($tm_cl): $@"] if $@;
+        if ($tm_cl eq 'Perinci::Tx::Manager') {
+            $Perinci::Tx::Manager::VERSION >= 0.29
+                or die "Your Perinci::Tx::Manager is too old, ".
+                    "please install v0.29 or later";
+        }
     }
 
     return;
@@ -585,7 +563,7 @@ sub action_begin_tx {
     my $res = $self->_pre_tx_action($req);
     return $res if $res;
 
-    $self->{_tx}->begin(
+    $self->{_tx_manager}->begin(
         tx_id   => $req->{tx_id},
         summary => $req->{summary},
     );
@@ -601,7 +579,7 @@ sub action_commit_tx {
     my $res = $self->_pre_tx_action($req);
     return $res if $res;
 
-    $self->{_tx}->commit(
+    $self->{_tx_manager}->commit(
         tx_id  => $req->{tx_id},
     );
 }
@@ -616,7 +594,7 @@ sub action_savepoint_tx {
     my $res = $self->_pre_tx_action($req);
     return $res if $res;
 
-    $self->{_tx}->savepoint(
+    $self->{_tx_manager}->savepoint(
         tx_id => $req->{tx_id},
         sp    => $req->{tx_spid},
     );
@@ -632,7 +610,7 @@ sub action_release_tx_savepoint {
     my $res = $self->_pre_tx_action($req);
     return $res if $res;
 
-    $self->{_tx}->release_savepoint(
+    $self->{_tx_manager}->release_savepoint(
         tx_id => $req->{tx_id},
         sp    => $req->{tx_spid},
     );
@@ -648,7 +626,7 @@ sub action_rollback_tx {
     my $res = $self->_pre_tx_action($req);
     return $res if $res;
 
-    $self->{_tx}->rollback(
+    $self->{_tx_manager}->rollback(
         tx_id => $req->{tx_id},
         sp    => $req->{tx_spid},
     );
@@ -664,7 +642,7 @@ sub action_list_txs {
     my $res = $self->_pre_tx_action($req);
     return $res if $res;
 
-    $self->{_tx}->list(
+    $self->{_tx_manager}->list(
         detail    => $req->{detail},
         tx_status => $req->{tx_status},
         tx_id     => $req->{tx_id},
@@ -681,7 +659,7 @@ sub action_undo {
     my $res = $self->_pre_tx_action($req);
     return $res if $res;
 
-    $self->{_tx}->undo(
+    $self->{_tx_manager}->undo(
         tx_id => $req->{tx_id},
     );
 }
@@ -696,7 +674,7 @@ sub action_redo {
     my $res = $self->_pre_tx_action($req);
     return $res if $res;
 
-    $self->{_tx}->redo(
+    $self->{_tx_manager}->redo(
         tx_id => $req->{tx_id},
     );
 }
@@ -711,7 +689,7 @@ sub action_discard_tx {
     my $res = $self->_pre_tx_action($req);
     return $res if $res;
 
-    $self->{_tx}->discard(
+    $self->{_tx_manager}->discard(
         tx_id => $req->{tx_id},
     );
 }
@@ -726,7 +704,7 @@ sub action_discard_all_txs {
     my $res = $self->_pre_tx_action($req);
     return $res if $res;
 
-    $self->{_tx}->discard_all(
+    $self->{_tx_manager}->discard_all(
         # XXX select client
     );
 }
@@ -745,7 +723,7 @@ Perinci::Access::InProcess - Use Rinci access protocol (Riap) to access Perl cod
 
 =head1 VERSION
 
-version 0.28
+version 0.29
 
 =head1 SYNOPSIS
 
@@ -894,6 +872,9 @@ Some applications of this include: changing C<default_lang> of metadata.
 Whether to allow transaction requests from client. Since this can cause the
 server to store transaction/undo data, this must be explicitly allowed.
 
+You need to install L<Perinci::Tx::Manager> for transaction support (unless you
+are using another transaction manager).
+
 =item * custom_tx_manager => STR|CODE
 
 Can be set to a string (class name) or a code that is expected to return a
@@ -901,11 +882,10 @@ transaction manager class.
 
 By default, L<Perinci::Tx::Manager> is instantiated and maintained (not
 reinstantiated on every request), but if C<custom_tx_manager> is a coderef, it
-will be called on each request to get transaction manager.
-
-This can be used to instantiate L<Perinci::Tx::Manager> in a custom way, e.g.
-specifying per-user transaction data directory and limits, which needs to be
-done on a per-request basis.
+will be called on each request to get transaction manager. This can be used to
+instantiate Perinci::Tx::Manager in a custom way, e.g. specifying per-user
+transaction data directory and limits, which needs to be done on a per-request
+basis.
 
 =back
 

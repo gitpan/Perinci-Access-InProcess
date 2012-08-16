@@ -3,7 +3,7 @@ NAME
     Perl code
 
 VERSION
-    version 0.28
+    version 0.29
 
 SYNOPSIS
      # in Your/Module.pm
@@ -142,6 +142,9 @@ METHODS
         cause the server to store transaction/undo data, this must be
         explicitly allowed.
 
+        You need to install Perinci::Tx::Manager for transaction support
+        (unless you are using another transaction manager).
+
     *   custom_tx_manager => STR|CODE
 
         Can be set to a string (class name) or a code that is expected to
@@ -150,11 +153,9 @@ METHODS
         By default, Perinci::Tx::Manager is instantiated and maintained (not
         reinstantiated on every request), but if "custom_tx_manager" is a
         coderef, it will be called on each request to get transaction
-        manager.
-
-        This can be used to instantiate Perinci::Tx::Manager in a custom
-        way, e.g. specifying per-user transaction data directory and limits,
-        which needs to be done on a per-request basis.
+        manager. This can be used to instantiate Perinci::Tx::Manager in a
+        custom way, e.g. specifying per-user transaction data directory and
+        limits, which needs to be done on a per-request basis.
 
   $pa->request($action => $server_url, \%extra) => $res
     Process Riap request and return enveloped result. $server_url will be

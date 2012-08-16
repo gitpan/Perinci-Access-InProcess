@@ -3,11 +3,8 @@ abstract: 'Use Rinci access protocol (Riap) to access Perl code'
 author:
   - 'Steven Haryanto <stevenharyanto@gmail.com>'
 build_requires:
-  File::chdir: 0
   Module::Build: 0.3601
   Perinci::Examples: 0.08
-  Perinci::Sub::Gen::Undoable: 0.20
-  Setup::File::Symlink: 0
   Test::More: 0.96
 configure_requires:
   Module::Build: 0.3601
@@ -25,7 +22,6 @@ requires:
   Perinci::Access::Base: 0
   Perinci::MetaAccessor::Default: 0
   Perinci::Sub::Wrapper: 0.25
-  Perinci::Tx::Manager: 0
   Perinci::Util: 0
   Riap: v1.1.14
   Rinci: v1.1.22
@@ -36,4 +32,4 @@ requires:
 resources:
   homepage: http://metacpan.org/release/Perinci-Access-InProcess
   repository: http://github.com/sharyanto/perl-Perinci-Access-InProcess
-version: 0.28
+version: 0.29

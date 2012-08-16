@@ -10,6 +10,5 @@ dist.ini
 lib/Perinci/Access/InProcess.pm
 t/00-compile.t
 t/01-basics.t
-t/lib/TestNested.pm
 t/release-pod-coverage.t
 t/release-pod-syntax.t

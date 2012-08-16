@@ -7,11 +7,8 @@ use Module::Build 0.3601;
 
 my %module_build_args = (
   "build_requires" => {
-    "File::chdir" => 0,
     "Module::Build" => "0.3601",
     "Perinci::Examples" => "0.08",
-    "Perinci::Sub::Gen::Undoable" => "0.20",
-    "Setup::File::Symlink" => 0,
     "Test::More" => "0.96"
   },
   "configure_requires" => {
@@ -22,7 +19,7 @@ my %module_build_args = (
     "Steven Haryanto <stevenharyanto\@gmail.com>"
   ],
   "dist_name" => "Perinci-Access-InProcess",
-  "dist_version" => "0.28",
+  "dist_version" => "0.29",
   "license" => "perl",
   "module_name" => "Perinci::Access::InProcess",
   "recommends" => {},
@@ -34,7 +31,6 @@ my %module_build_args = (
     "Perinci::Access::Base" => 0,
     "Perinci::MetaAccessor::Default" => 0,
     "Perinci::Sub::Wrapper" => "0.25",
-    "Perinci::Tx::Manager" => 0,
     "Perinci::Util" => 0,
     "Riap" => "v1.1.14",
     "Rinci" => "v1.1.22",
