@@ -12,7 +12,7 @@ use Scalar::Util qw(blessed reftype);
 use SHARYANTO::Package::Util qw(package_exists);
 use URI;
 
-our $VERSION = '0.29'; # VERSION
+our $VERSION = '0.30'; # VERSION
 
 our $re_mod = qr/\A[A-Za-z_][A-Za-z_0-9]*(::[A-Za-z_][A-Za-z_0-9]*)*\z/;
 
@@ -377,21 +377,6 @@ sub action_call {
     my ($code, $meta) = @{$res->[2]};
     my %args = %{ $req->{args} // {} };
 
-    my $ff  = $meta->{features} // {};
-    my $ftx = $ff->{tx} && ($ff->{tx}{use} || $ff->{tx}{req});
-    my $dry = $ff->{dry_run} && $args{-dry_run};
-
-    # even if client doesn't mention tx_id, some function still needs
-    # -undo_trash_dir under dry_run for testing (e.g. setup_symlink()).
-    if (!defined($req->{tx_id}) && $ftx && $dry && !$args{-undo_trash_dir}) {
-        if ($tm) {
-            $res = $tm->get_trash_dir;
-            $args{-undo_trash_dir} = $res->[2]; # XXX if error?
-        } else {
-            $args{-undo_trash_dir} = "/tmp"; # TMP
-        }
-    }
-
     if ($tm) {
         $res = $tm->call(f => "$req->{-module}::$req->{-leaf}", args=>\%args);
         $tm->{_tx_id} = undef if $tm;
@@ -543,6 +528,9 @@ sub _pre_tx_action {
             die $self->{_tx_manager} unless blessed($self->{_tx_manager});
         };
         return [500, "Can't initialize tx manager ($tm_cl): $@"] if $@;
+        # we just want to force newer version, we currently can't specify this
+        # in Makefile.PL because peritm's tests use us. this might be rectified
+        # in the future.
         if ($tm_cl eq 'Perinci::Tx::Manager') {
             $Perinci::Tx::Manager::VERSION >= 0.29
                 or die "Your Perinci::Tx::Manager is too old, ".
@@ -723,7 +711,7 @@ Perinci::Access::InProcess - Use Rinci access protocol (Riap) to access Perl cod
 
 =head1 VERSION
 
-version 0.29
+version 0.30
 
 =head1 SYNOPSIS
 
