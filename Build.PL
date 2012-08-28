@@ -19,7 +19,7 @@ my %module_build_args = (
     "Steven Haryanto <stevenharyanto\@gmail.com>"
   ],
   "dist_name" => "Perinci-Access-InProcess",
-  "dist_version" => "0.30",
+  "dist_version" => "0.31",
   "license" => "perl",
   "module_name" => "Perinci::Access::InProcess",
   "recommends" => {},
@@ -33,7 +33,7 @@ my %module_build_args = (
     "Perinci::Sub::Wrapper" => "0.25",
     "Perinci::Util" => 0,
     "Riap" => "v1.1.14",
-    "Rinci" => "v1.1.25",
+    "Rinci" => "v1.1.27",
     "SHARYANTO::Package::Util" => 0,
     "Tie::Cache" => 0,
     "URI" => 0,

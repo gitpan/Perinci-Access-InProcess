@@ -12,7 +12,7 @@ use Scalar::Util qw(blessed reftype);
 use SHARYANTO::Package::Util qw(package_exists);
 use URI;
 
-our $VERSION = '0.30'; # VERSION
+our $VERSION = '0.31'; # VERSION
 
 our $re_mod = qr/\A[A-Za-z_][A-Za-z_0-9]*(::[A-Za-z_][A-Za-z_0-9]*)*\z/;
 
@@ -378,9 +378,13 @@ sub action_call {
     my %args = %{ $req->{args} // {} };
 
     if ($tm) {
-        $res = $tm->call(f => "$req->{-module}::$req->{-leaf}", args=>\%args);
+        $res = $tm->action(
+            f => "$req->{-module}::$req->{-leaf}", args=>\%args,
+            confirm => $req->{confirm},
+        );
         $tm->{_tx_id} = undef if $tm;
     } else {
+        $args{-confirm} = 1 if $req->{confirm};
         $res = $code->(%args);
     }
 
@@ -711,7 +715,7 @@ Perinci::Access::InProcess - Use Rinci access protocol (Riap) to access Perl cod
 
 =head1 VERSION
 
-version 0.30
+version 0.31
 
 =head1 SYNOPSIS
 
