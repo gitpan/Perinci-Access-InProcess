@@ -3,7 +3,7 @@ NAME
     Perl code
 
 VERSION
-    version 0.32
+    version 0.33
 
 SYNOPSIS
      # in Your/Module.pm
@@ -85,8 +85,7 @@ DESCRIPTION
 
     *   Transaction/undo
 
-        This class implements Riap::Transaction. See
-        Perinci::Access::InProcess::Tx for more details.
+        This class implements Riap::Transaction.
 
   Location of metadata
     By default, the metadata should be put in %SPEC package variable, in a

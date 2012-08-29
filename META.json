@@ -31,9 +31,10 @@
             "Module::List" : 0,
             "Perinci::Access::Base" : 0,
             "Perinci::MetaAccessor::Default" : 0,
+            "Perinci::Object" : "0.11",
             "Perinci::Sub::Wrapper" : "0.25",
             "Perinci::Util" : 0,
-            "Riap" : "v1.1.14",
+            "Riap" : "v1.1.19",
             "Rinci" : "v1.1.27",
             "SHARYANTO::Package::Util" : 0,
             "Tie::Cache" : 0,
@@ -55,6 +56,6 @@
          "url" : "http://github.com/sharyanto/perl-Perinci-Access-InProcess"
       }
    },
-   "version" : "0.32"
+   "version" : "0.33"
 }
 

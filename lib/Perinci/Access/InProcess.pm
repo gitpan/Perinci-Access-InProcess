@@ -7,12 +7,13 @@ use Log::Any '$log';
 
 use parent qw(Perinci::Access::Base);
 
+use Perinci::Object;
 use Perinci::Util qw(get_package_meta_accessor);
 use Scalar::Util qw(blessed reftype);
 use SHARYANTO::Package::Util qw(package_exists);
 use URI;
 
-our $VERSION = '0.32'; # VERSION
+our $VERSION = '0.33'; # VERSION
 
 our $re_mod = qr/\A[A-Za-z_][A-Za-z_0-9]*(::[A-Za-z_][A-Za-z_0-9]*)*\z/;
 
@@ -377,6 +378,18 @@ sub action_call {
     my ($code, $meta) = @{$res->[2]};
     my %args = %{ $req->{args} // {} };
 
+    if ($req->{dry_run}) {
+        my $risub = risub($meta);
+        return [412, "Function does not support dry run"]
+            unless $risub->can_dry_run;
+        if ($risub->feature('dry_run')) {
+            $args{-dry_run} = 1;
+        } else {
+            $args{-tx_action} = 'check_state';
+            undef $tm;
+        }
+    }
+
     if ($tm) {
         $res = $tm->action(
             f => "$req->{-module}::$req->{-leaf}", args=>\%args,
@@ -717,7 +730,7 @@ Perinci::Access::InProcess - Use Rinci access protocol (Riap) to access Perl cod
 
 =head1 VERSION
 
-version 0.32
+version 0.33
 
 =head1 SYNOPSIS
 
@@ -803,8 +816,7 @@ get a consistent interface.
 
 =item * Transaction/undo
 
-This class implements L<Riap::Transaction>. See
-L<Perinci::Access::InProcess::Tx> for more details.
+This class implements L<Riap::Transaction>.
 
 =back
 
