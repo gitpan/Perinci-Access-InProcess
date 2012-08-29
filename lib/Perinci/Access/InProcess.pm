@@ -14,7 +14,7 @@ use SHARYANTO::Package::Util qw(package_exists);
 use URI;
 use UUID::Random;
 
-our $VERSION = '0.34'; # VERSION
+our $VERSION = '0.35'; # VERSION
 
 our $re_mod = qr/\A[A-Za-z_][A-Za-z_0-9]*(::[A-Za-z_][A-Za-z_0-9]*)*\z/;
 
@@ -386,6 +386,7 @@ sub action_call {
         if ($risub->feature('dry_run')) {
             $args{-dry_run} = 1;
         } else {
+            $args{-dry_run} = 1;
             $args{-tx_action} = 'check_state';
             $args{-tx_action_id} = UUID::Random::generate();
             undef $tm;
@@ -732,7 +733,7 @@ Perinci::Access::InProcess - Use Rinci access protocol (Riap) to access Perl cod
 
 =head1 VERSION
 
-version 0.34
+version 0.35
 
 =head1 SYNOPSIS
 
