@@ -3,7 +3,7 @@ NAME
     Perl code
 
 VERSION
-    version 0.35
+    version 0.36
 
 SYNOPSIS
      # in Your/Module.pm
@@ -71,7 +71,8 @@ DESCRIPTION
     %SPEC). Indeed, if you do not need Riap, you can access your module just
     like any normal Perl module.
 
-    But Perinci::Access::InProcess offers several benefits:
+    But Perinci::Access::InProcess (called periai for short) offers several
+    benefits:
 
     *   Custom location of metadata
 
@@ -103,6 +104,19 @@ DESCRIPTION
     The default accessor class is Perinci::MetaAccessor::Default.
     Alternatively, you can simply devise your own system to retrieve
     metadata which you can put in %SPEC at the end.
+
+  Progress indicator
+    periai can also display progress indicator for function that does
+    progress updating. Function expresses that it does progress updating
+    through the "features" property in its metadata:
+
+     features => {
+         progress => 1,
+         ...
+     }
+
+    periai will then pass a special argument "-progress" containing
+    Progress::Any object.
 
 METHODS
   PKG->new(%attrs) => OBJ

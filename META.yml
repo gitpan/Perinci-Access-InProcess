@@ -24,8 +24,9 @@ requires:
   Perinci::Object: 0.11
   Perinci::Sub::Wrapper: 0.25
   Perinci::Util: 0
+  Progress::Any: 0
   Riap: v1.1.19
-  Rinci: v1.1.28
+  Rinci: v1.1.31
   SHARYANTO::Package::Util: 0
   Tie::Cache: 0
   URI: 0
@@ -34,4 +35,4 @@ requires:
 resources:
   homepage: http://metacpan.org/release/Perinci-Access-InProcess
   repository: http://github.com/sharyanto/perl-Perinci-Access-InProcess
-version: 0.35
+version: 0.36
