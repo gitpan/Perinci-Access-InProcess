@@ -3,7 +3,7 @@ NAME
     Perl code
 
 VERSION
-    version 0.36
+    version 0.37
 
 SYNOPSIS
      # in Your/Module.pm
@@ -127,6 +127,12 @@ METHODS
     *   load => BOOL (default 1)
 
         Whether attempt to load modules using "require".
+
+    *   cache_size => INT (default: 100)
+
+        Specify cache size (in number of items). Cache saves the result of
+        function wrapping so future requests to the same function need not
+        involve wrapping again. Setting this to 0 disables caching.
 
     *   after_load => CODE
 

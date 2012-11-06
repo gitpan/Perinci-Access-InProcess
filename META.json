@@ -4,7 +4,7 @@
       "Steven Haryanto <stevenharyanto@gmail.com>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Dist::Zilla version 4.300006, CPAN::Meta::Converter version 2.113640",
+   "generated_by" : "Dist::Zilla version 4.300015, CPAN::Meta::Converter version 2.120921",
    "license" : [
       "perl_5"
    ],
@@ -26,21 +26,21 @@
       },
       "runtime" : {
          "requires" : {
-            "Class::Inspector" : 0,
-            "Log::Any" : 0,
-            "Module::List" : 0,
-            "Perinci::Access::Base" : 0,
-            "Perinci::MetaAccessor::Default" : 0,
+            "Class::Inspector" : "0",
+            "Log::Any" : "0",
+            "Module::List" : "0",
+            "Perinci::Access::Base" : "0",
+            "Perinci::MetaAccessor::Default" : "0",
             "Perinci::Object" : "0.11",
-            "Perinci::Sub::Wrapper" : "0.25",
-            "Perinci::Util" : 0,
-            "Progress::Any" : 0,
+            "Perinci::Sub::Wrapper" : "0.33",
+            "Perinci::Util" : "0",
+            "Progress::Any" : "0",
             "Riap" : "v1.1.19",
             "Rinci" : "v1.1.31",
-            "SHARYANTO::Package::Util" : 0,
-            "Tie::Cache" : 0,
-            "URI" : 0,
-            "UUID::Random" : 0,
+            "SHARYANTO::Package::Util" : "0",
+            "Tie::Cache" : "0",
+            "URI" : "0",
+            "UUID::Random" : "0",
             "perl" : "5.010001"
          }
       },
@@ -58,6 +58,6 @@
          "url" : "http://github.com/sharyanto/perl-Perinci-Access-InProcess"
       }
    },
-   "version" : "0.36"
+   "version" : "0.37"
 }
 
