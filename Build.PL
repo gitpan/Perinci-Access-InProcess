@@ -19,7 +19,7 @@ my %module_build_args = (
     "Steven Haryanto <stevenharyanto\@gmail.com>"
   ],
   "dist_name" => "Perinci-Access-InProcess",
-  "dist_version" => "0.37",
+  "dist_version" => "0.38",
   "license" => "perl",
   "module_name" => "Perinci::Access::InProcess",
   "recommends" => {},
@@ -31,7 +31,7 @@ my %module_build_args = (
     "Perinci::Access::Base" => 0,
     "Perinci::MetaAccessor::Default" => 0,
     "Perinci::Object" => "0.11",
-    "Perinci::Sub::Wrapper" => "0.33",
+    "Perinci::Sub::Wrapper" => "0.34",
     "Perinci::Util" => 0,
     "Progress::Any" => 0,
     "Riap" => "v1.1.19",

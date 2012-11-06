@@ -22,7 +22,7 @@ requires:
   Perinci::Access::Base: 0
   Perinci::MetaAccessor::Default: 0
   Perinci::Object: 0.11
-  Perinci::Sub::Wrapper: 0.33
+  Perinci::Sub::Wrapper: 0.34
   Perinci::Util: 0
   Progress::Any: 0
   Riap: v1.1.19
@@ -35,4 +35,4 @@ requires:
 resources:
   homepage: http://metacpan.org/release/Perinci-Access-InProcess
   repository: http://github.com/sharyanto/perl-Perinci-Access-InProcess
-version: 0.37
+version: 0.38
