@@ -1,6 +1,6 @@
 package Perinci::Access::InProcess;
 
-use 5.010;
+use 5.010001;
 use strict;
 use warnings;
 use Log::Any '$log';
@@ -14,7 +14,7 @@ use SHARYANTO::Package::Util qw(package_exists);
 use URI;
 use UUID::Random;
 
-our $VERSION = '0.38'; # VERSION
+our $VERSION = '0.39'; # VERSION
 
 our $re_mod = qr/\A[A-Za-z_][A-Za-z_0-9]*(::[A-Za-z_][A-Za-z_0-9]*)*\z/;
 
@@ -33,11 +33,15 @@ sub _init {
         variable => [],
     ); # key = type, val = [[ACTION, META], ...]
 
+    # cache, so we can save a method call for every request()
+    $self->{_metas} = {}; # key = act
+
     my @comacts;
     for my $meth (@{Class::Inspector->methods(ref $self)}) {
         next unless $meth =~ /^actionmeta_(.+)/;
         my $act = $1;
         my $meta = $self->$meth();
+        $self->{_metas}{$act} = $meta;
         for my $type (@{$meta->{applies_to}}) {
             if ($type eq '*') {
                 push @comacts, [$act, $meta];
@@ -188,6 +192,7 @@ sub request {
     $req->{-leaf}    = $leaf;
     $req->{-module}  = $module;
 
+    my $module_load_err;
     if ($module) {
         my $module_p = $module;
         $module_p =~ s!::!/!g;
@@ -197,14 +202,15 @@ sub request {
         if ($self->{load}) {
             unless ($INC{$module_p}) {
                 eval { require $module_p };
-                my $req_err = $@;
-                if ($req_err) {
-                    if (!package_exists($module)) {
-                        return [500, "Can't load module $module (probably ".
-                                    "mistyped or missing module): $req_err"];
-                    } elsif ($req_err !~ m!Can't locate!) {
-                        return [500, "Can't load module $module (probably ".
-                                    "compile error): $req_err"];
+                $module_load_err = $@;
+                if ($module_load_err) {
+                    if (!package_exists($module) ||
+                            $module_load_err !~ m!Can't locate!) {
+                        unless ($self->{_metas}{$action}{module_missing_ok}) {
+                            return [500, "Can't load module $module (probably ".
+                                        "missing or compile error): ".
+                                            $module_load_err];
+                        }
                     }
                     # require error of "Can't locate ..." can be ignored. it
                     # might mean package is already defined by other code. we'll
@@ -250,8 +256,6 @@ sub request {
         unless $self->{_typeacts}{ $req->{-type} }{ $action };
 
     # check transaction
-
-    my $mmeth = "actionmeta_$action";
     $self->$meth($req);
 }
 
@@ -294,6 +298,7 @@ sub action_actions {
 sub actionmeta_list { +{
     applies_to => ['package'],
     summary    => "List code entities inside this package code entity",
+    module_missing_ok => 1,
 } }
 
 sub action_list {
@@ -746,7 +751,7 @@ Perinci::Access::InProcess - Use Rinci access protocol (Riap) to access Perl cod
 
 =head1 VERSION
 
-version 0.38
+version 0.39
 
 =head1 SYNOPSIS
 
@@ -988,7 +993,7 @@ Steven Haryanto <stevenharyanto@gmail.com>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Steven Haryanto.
+This software is copyright (c) 2013 by Steven Haryanto.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
