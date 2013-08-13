@@ -3,7 +3,7 @@ NAME
     Perl code
 
 VERSION
-    version 0.39
+    version 0.40
 
 SYNOPSIS
      # in Your/Module.pm
@@ -65,6 +65,8 @@ SYNOPSIS
      # -> [200, "OK", {v=>1.1, summary=>'Multiple many numbers', ...}]
 
 DESCRIPTION
+    TO REWRITE
+
     This class implements Rinci access protocol (Riap) to access local Perl
     code. This might seem like a long-winded and slow way to access things
     that are already accessible from Perl like functions and metadata (in
@@ -96,15 +98,6 @@ DESCRIPTION
     The metadata for the top-level namespace ("/") should be put in
     $main::SPEC{':package'}.
 
-    If you want to put metadata elsewhere, you can pass "meta_accessor" =>
-    'Custom_Class' to constructor argument, or set this in your module:
-
-     our $PERINCI_META_ACCESSOR = 'Custom::Class';
-
-    The default accessor class is Perinci::MetaAccessor::Default.
-    Alternatively, you can simply devise your own system to retrieve
-    metadata which you can put in %SPEC at the end.
-
   Progress indicator
     periai can also display progress indicator for function that does
     progress updating. Function expresses that it does progress updating
@@ -121,8 +114,6 @@ DESCRIPTION
 METHODS
   PKG->new(%attrs) => OBJ
     Instantiate object. Known attributes:
-
-    *   meta_accessor => STR (default 'Perinci::MetaAccessor::Default')
 
     *   load => BOOL (default 1)
 
@@ -200,6 +191,7 @@ METHODS
         Schemas in metadata (like in the "args" and "return" property) are
         normalized by Perinci::Sub::Wrapper.
 
+  $pa->parse_url($server_url) => HASH
 FAQ
   Why wrap?
     The wrapping process accomplishes several things, among others: checking

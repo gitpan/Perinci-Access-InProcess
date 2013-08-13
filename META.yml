@@ -9,7 +9,7 @@ build_requires:
 configure_requires:
   Module::Build: 0.3601
 dynamic_config: 0
-generated_by: 'Dist::Zilla version 4.300015, CPAN::Meta::Converter version 2.120921'
+generated_by: 'Dist::Zilla version 4.300035, CPAN::Meta::Converter version 2.131560'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -20,10 +20,8 @@ requires:
   Log::Any: 0
   Module::List: 0
   Perinci::Access::Base: 0
-  Perinci::MetaAccessor::Default: 0
   Perinci::Object: 0.11
   Perinci::Sub::Wrapper: 0.34
-  Perinci::Util: 0
   Progress::Any: 0
   Riap: v1.1.19
   Rinci: v1.1.31
@@ -35,4 +33,4 @@ requires:
 resources:
   homepage: http://metacpan.org/release/Perinci-Access-InProcess
   repository: http://github.com/sharyanto/perl-Perinci-Access-InProcess
-version: 0.39
+version: 0.40

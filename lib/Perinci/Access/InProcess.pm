@@ -8,13 +8,12 @@ use Log::Any '$log';
 use parent qw(Perinci::Access::Base);
 
 use Perinci::Object;
-use Perinci::Util qw(get_package_meta_accessor);
 use Scalar::Util qw(blessed reftype);
 use SHARYANTO::Package::Util qw(package_exists);
 use URI;
 use UUID::Random;
 
-our $VERSION = '0.39'; # VERSION
+our $VERSION = '0.40'; # VERSION
 
 our $re_mod = qr/\A[A-Za-z_][A-Za-z_0-9]*(::[A-Za-z_][A-Za-z_0-9]*)*\z/;
 
@@ -59,7 +58,6 @@ sub _init {
     $self->{cache_size}            //= 100;
     $self->{use_tx}                //= 0;
     $self->{custom_tx_manager}     //= undef;
-    $self->{meta_accessor} //= "Perinci::MetaAccessor::Default";
     $self->{load}                  //= 1;
     $self->{extra_wrapper_args}    //= {};
     $self->{extra_wrapper_convert} //= {};
@@ -74,35 +72,25 @@ sub _init {
     }
 }
 
-sub _get_meta_accessor {
-    my ($self, $req) = @_;
-
-    get_package_meta_accessor(
-        package => $req->{-module},
-        default_class => $self->{meta_accessor}
-    );
-}
-
 sub _get_code_and_meta {
     require Perinci::Sub::Wrapper;
 
     no strict 'refs';
     my ($self, $req) = @_;
     my $name = $req->{-module} . "::" . $req->{-leaf};
-    return [200, "OK", $self->{_cache}{$name}] if $self->{_cache}{$name};
+    return [200, "OK (cached)", $self->{_cache}{$name}]
+        if $self->{_cache}{$name};
 
-    my $res = $self->_get_meta_accessor($req);
-    return $res if $res->[0] != 200;
-    my $ma = $res->[2];
-
-    my $meta = $ma->get_meta($req->{-module}, $req->{-leaf});
+    no strict 'refs';
+    my $metas = \%{"$req->{-module}::SPEC"};
+    my $meta = $metas->{ $req->{-leaf} || ":package" };
 
     # supply a default, empty metadata for package, just so we can put $VERSION
     # into it
     if (!$meta && $req->{-type} eq 'package') {
         $meta = {v=>1.1};
     }
-    return [404, "No metadata"] unless $meta;
+    return [404, "No metadata for $name"] unless $meta;
 
     my $code;
     my $extra;
@@ -238,7 +226,7 @@ sub request {
             # XXX check existence of variable
             $type = 'variable';
         } else {
-            return [404, "Can't find function $leaf in $module"]
+            return [404, "Can't find function $leaf in module $module"]
                 unless defined &{"$module\::$leaf"};
             $type = 'function';
         }
@@ -257,6 +245,11 @@ sub request {
 
     # check transaction
     $self->$meth($req);
+}
+
+sub parse_url {
+    my ($self, $uri) = @_;
+    {path=>$uri->path};
 }
 
 sub actionmeta_info { +{
@@ -331,10 +324,8 @@ sub action_list {
     }
 
     # get all entities from this module
-    my $res = $self->_get_meta_accessor($req);
-    return $res if $res->[0] != 200;
-    my $ma = $res->[2];
-    my $spec = $ma->get_all_metas($req->{-module});
+    no strict 'refs';
+    my $spec = \%{"$req->{-module}\::SPEC"};
     my $base = "pl:/$req->{-module}"; $base =~ s!::!/!g;
     for (sort keys %$spec) {
         next if /^:/;
@@ -439,7 +430,7 @@ sub action_complete_arg_val {
     return $res unless $res->[0] == 200;
     my (undef, $meta) = @{$res->[2]};
     my $args_p = $meta->{args} // {};
-    my $arg_p = $args_p->{$arg} or return [404, "No such function arg"];
+    my $arg_p = $args_p->{$arg} or return [400, "Unknown function arg '$arg'"];
 
     my $words;
     eval { # completion sub can die, etc.
@@ -740,9 +731,8 @@ sub action_discard_all_txs {
 1;
 # ABSTRACT: Use Rinci access protocol (Riap) to access Perl code
 
-
-
 __END__
+
 =pod
 
 =head1 NAME
@@ -751,7 +741,7 @@ Perinci::Access::InProcess - Use Rinci access protocol (Riap) to access Perl cod
 
 =head1 VERSION
 
-version 0.39
+version 0.40
 
 =head1 SYNOPSIS
 
@@ -815,6 +805,8 @@ version 0.39
 
 =head1 DESCRIPTION
 
+TO REWRITE
+
 This class implements Rinci access protocol (L<Riap>) to access local Perl code.
 This might seem like a long-winded and slow way to access things that are
 already accessible from Perl like functions and metadata (in C<%SPEC>). Indeed,
@@ -851,15 +843,6 @@ C<$Foo::Bar::SPEC{'$var'}>, C</Foo/Bar/> in C<$Foo::Bar::SPEC{':package'}>. The
 metadata for the top-level namespace (C</>) should be put in
 C<$main::SPEC{':package'}>.
 
-If you want to put metadata elsewhere, you can pass C<meta_accessor> =>
-C<'Custom_Class'> to constructor argument, or set this in your module:
-
- our $PERINCI_META_ACCESSOR = 'Custom::Class';
-
-The default accessor class is L<Perinci::MetaAccessor::Default>. Alternatively,
-you can simply devise your own system to retrieve metadata which you can put in
-C<%SPEC> at the end.
-
 =head2 Progress indicator
 
 periai can also display progress indicator for function that does progress
@@ -883,8 +866,6 @@ L<Progress::Any> object.
 Instantiate object. Known attributes:
 
 =over 4
-
-=item * meta_accessor => STR (default 'Perinci::MetaAccessor::Default')
 
 =item * load => BOOL (default 1)
 
@@ -964,6 +945,8 @@ by L<Perinci::Sub::Wrapper>.
 
 =back
 
+=head2 $pa->parse_url($server_url) => HASH
+
 =head1 FAQ
 
 =head2 Why wrap?
@@ -999,4 +982,3 @@ This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
 
 =cut
-
