@@ -13,7 +13,7 @@ use SHARYANTO::Package::Util qw(package_exists);
 use URI;
 use UUID::Random;
 
-our $VERSION = '0.41'; # VERSION
+our $VERSION = '0.42'; # VERSION
 
 our $re_mod = qr/\A[A-Za-z_][A-Za-z_0-9]*(::[A-Za-z_][A-Za-z_0-9]*)*\z/;
 
@@ -249,7 +249,7 @@ sub request {
 
 sub parse_url {
     my ($self, $uri) = @_;
-    return [400, "Please specify URI"] unless $uri;
+    die "Please specify url" unless $uri;
     $uri = URI->new($uri) unless blessed($uri);
     {proto=>"pl", path=>$uri->path};
 }
@@ -743,7 +743,7 @@ Perinci::Access::InProcess - Use Rinci access protocol (Riap) to access Perl cod
 
 =head1 VERSION
 
-version 0.41
+version 0.42
 
 =head1 SYNOPSIS
 
