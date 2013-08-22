@@ -17,7 +17,7 @@ my %module_build_args = (
     "Steven Haryanto <stevenharyanto\@gmail.com>"
   ],
   "dist_name" => "Perinci-Access-InProcess",
-  "dist_version" => "0.42",
+  "dist_version" => "0.43",
   "license" => "perl",
   "module_name" => "Perinci::Access::InProcess",
   "recommends" => {},
@@ -26,7 +26,7 @@ my %module_build_args = (
     "Class::Inspector" => 0,
     "Log::Any" => 0,
     "Module::List" => 0,
-    "Perinci::Access::Base" => 0,
+    "Perinci::Access::Base" => "0.29",
     "Perinci::Object" => "0.11",
     "Perinci::Sub::Wrapper" => "0.34",
     "Progress::Any" => 0,
@@ -40,10 +40,8 @@ my %module_build_args = (
   },
   "script_files" => [],
   "test_requires" => {
-    "Capture::Tiny" => 0,
     "Perinci::Examples" => "0.08",
-    "Test::More" => "0.96",
-    "blib" => 0
+    "Test::More" => "0.96"
   }
 );
 

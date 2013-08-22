@@ -3,7 +3,7 @@ NAME
     Perl code
 
 VERSION
-    version 0.42
+    version 0.43
 
 SYNOPSIS
      # in Your/Module.pm
@@ -54,10 +54,10 @@ SYNOPSIS
 
      # list all functions in package
      my $res = $pa->request(list => '/My/Module/', {type=>'function'});
-     # -> [200, "OK", ['/My/Module/mult2', '/My/Module/multn']]
+     # -> [200, "OK", ['pl:/My/Module/mult2', 'pl:/My/Module/multn']]
 
      # call function
-     my $res = $pa->request(call => '/My/Module/mult2', {args=>{a=>2, b=>3}});
+     my $res = $pa->request(call => 'pl:/My/Module/mult2', {args=>{a=>2, b=>3}});
      # -> [200, "OK", 6]
 
      # get function metadata
@@ -65,59 +65,138 @@ SYNOPSIS
      # -> [200, "OK", {v=>1.1, summary=>'Multiple many numbers', ...}]
 
 DESCRIPTION
-    TO REWRITE
-
     This class implements Rinci access protocol (Riap) to access local Perl
     code. This might seem like a long-winded and slow way to access things
     that are already accessible from Perl like functions and metadata (in
     %SPEC). Indeed, if you do not need Riap, you can access your module just
     like any normal Perl module.
 
-    But Perinci::Access::InProcess (called periai for short) offers several
-    benefits:
+    Supported features:
 
-    *   Custom location of metadata
+    *   Basic Riap actions
 
-        Metadata can be placed not in %SPEC but elsewhere, like in another
-        file or even database, or even by merging from several sources.
-
-    *   Function wrapping
-
-        Can be used to convert argument passing style or produce result
-        envelope, so you get a consistent interface.
+        These include "info", "actions", "meta", "list", and "call" actions.
 
     *   Transaction/undo
 
-        This class implements Riap::Transaction.
+        According to Rinci::Transaction.
 
-  Location of metadata
-    By default, the metadata should be put in %SPEC package variable, in a
-    key with the same name as the URI path leaf (use ":package" for the
-    package itself). For example, metadata for "/Foo/Bar/$var" should be put
-    in $Foo::Bar::SPEC{'$var'}, "/Foo/Bar/" in $Foo::Bar::SPEC{':package'}.
-    The metadata for the top-level namespace ("/") should be put in
-    $main::SPEC{':package'}.
+    *   Function wrapping
 
-  Progress indicator
-    periai can also display progress indicator for function that does
-    progress updating. Function expresses that it does progress updating
-    through the "features" property in its metadata:
+        Wrapping is used to convert argument passing style, produce result
+        envelope, add argument validation, as well as numerous other
+        functionalities. See Perinci::Sub::Wrapper for more details on
+        wrapping. The default behavior will call wrapped functions.
 
-     features => {
-         progress => 1,
-         ...
-     }
+    *   Custom location of metadata
 
-    periai will then pass a special argument "-progress" containing
-    Progress::Any object.
+        By default, metadata are assumed to be stored embedded in Perl
+        source code in %SPEC package variables (with keys matching function
+        names, $variable names, or ":package" for the package metadata
+        itself).
+
+        You can override "get_meta()" to provide custom behavior. For
+        example, you can store metadata in separate file or database.
+
+    *   Custom code entity tree
+
+        By default, tree are formed by traversing Perl packages and their
+        contents, for example if a "list" action is requested on uri
+        "/Foo/Bar/" then the contents of package "Foo::Bar" and its
+        subpackages will be traversed for the entities.
+
+        You can override "action_list()" to provide custom behavior. For
+        example, you can lookup from the database.
+
+    *   Progress indicator
+
+        Functions can express that they do progress updating through the
+        "features" property in its metadata:
+
+         features => {
+             progress => 1,
+             ...
+         }
+
+        For these functions, periai will then pass a special argument
+        "-progress" containing Progress::Any object. Functions can update
+        progress using this object.
+
+  How request is processed
+    User calls "$pa->request($action => $uri, \%extras)". Internally, the
+    method creates a hash $req which contains Riap request keys as well as
+    internal information about the Riap request (the latter will be prefixed
+    with dash "-"). Initially it will contain "action" and "uri" (converted
+    to URI object) and the %extras keys from the request() arguments sent by
+    the user.
+
+    Internal "_parse_uri()" method will be called to parse "uri" into
+    "-uri_dir" (the "dir" part), "-uri_leaf" (the "basename" part), and
+    "-perl_package". Forbidden or invalid paths will cause this method to
+    return an enveloped error response and the request to stop. For example,
+    if "uri" is "/Foo/Bar/" then "-uri_dir" is "/Foo/Bar/" and "-uri_leaf"
+    is an empty string. If "uri" is "/Foo/Bar/baz" then "-uri_dir" is
+    "/Foo/Bar/" while "-uri_leaf" is "baz". "-uri_dir" will be used for the
+    "list" action. In both cases, "-perl_package" will be set to "Foo::Bar".
+
+    The code entity type is then determined currently using a few simple
+    heuristic rules: if "-uri_leaf" is empty string, type is "package". If
+    "-uri_leaf" begins with "[$%@]", type is "variable". Otherwise, type is
+    "function". "-type" will be set.
+
+    After this, the appropriate "action_ACTION()" method will be called. For
+    example if action is "meta" then "action_meta()" method will be called,
+    with $req as the argument. This will in turn, depending on the action,
+    either call "get_meta()" (for example if action is "meta") or
+    "get_code()" (for example if action is "call"), also with $req as the
+    argument. "get_meta()" and "get_code()" should return nothing on
+    success, and set either "-meta" (a defhash containing Rinci metadata) or
+    "-code" (a coderef), respectively. On error, they must return an
+    enveloped error response.
+
+    "get_meta()" or "get_code()" might call "_load_module()" to load Perl
+    modules if the "load" attribute is set to true.
 
 METHODS
   PKG->new(%attrs) => OBJ
     Instantiate object. Known attributes:
 
-    *   load => BOOL (default 1)
+    *   load => BOOL (default: 1)
 
-        Whether attempt to load modules using "require".
+        Whether to load Perl modules that are requested.
+
+    *   after_load => CODE
+
+        If set, code will be executed the first time Perl module is
+        successfully loaded.
+
+    *   wrap => BOOL (default: 1)
+
+        If set to false, then wil use original subroutine and metadata
+        instead of wrapped ones, for example if you are very concerned about
+        performance (do not want to add another eval {} and subroutine call
+        introduced by wrapping) or do not need the functionality provided by
+        the wrapper (e.g. your function does not die and already validates
+        its arguments, you do not want Sah schemas in the metadata to be
+        normalized, etc).
+
+        Wrapping is implemented inside "get_meta()" and "get_code()".
+
+    *   extra_wrapper_args => HASH
+
+        If set, will be passed to Perinci::Sub::Wrapper's wrap_sub() when
+        wrapping subroutines. Some applications of this include: adding
+        "timeout" or "result_postfilter" properties to functions.
+
+        This is only relevant if you enable "wrap".
+
+    *   extra_wrapper_convert => HASH
+
+        If set, will be passed to Perinci::Sub::Wrapper wrap_sub()'s
+        "convert" argument when wrapping subroutines. Some applications of
+        this include: changing "default_lang" of metadata.
+
+        This is only relevant if you enable "wrap".
 
     *   cache_size => INT (default: 100)
 
@@ -125,40 +204,23 @@ METHODS
         function wrapping so future requests to the same function need not
         involve wrapping again. Setting this to 0 disables caching.
 
-    *   after_load => CODE
+        Caching is implemented inside "get_meta()" and "get_code()" so you
+        might want to implement your own caching if you override those.
 
-        If set, code will be executed the first time Perl module is
-        successfully loaded.
+    *   allow_paths => REGEX|STR|ARRAY
 
-    *   use_wrapped_sub => BOOL (default: 1)
+        If defined, only requests with "uri" matching specified path will be
+        allowed. Can be a string (e.g. "/spanel/api/") or regex (e.g.
+        "qr{^/[^/]+/api/}") or an array of those.
 
-        If set to false, then wil use original subroutine instead of wrapped
-        one, for example if you are very concerned about performance (do not
-        want to add another eval {} and subroutine call introduced by
-        wrapping) or do not need the functionality provided by the wrapper
-        (e.g. your function does not die and already validates its
-        arguments, etc).
+    *   deny_paths => REGEX|STR|ARRAY
 
-        Can also be set on a per-entity basis by setting the
-        "_perinci.access.inprocess.use_wrapped_sub" metadata property.
+        If defined, requests with "uri" matching specified path will be
+        denied. Like "allow_paths", value can be a string (e.g.
+        "/spanel/api/") or regex (e.g. "qr{^/[^/]+/api/}") or an array of
+        those.
 
-    *   extra_wrapper_args => HASH
-
-        If set, will be passed to Perinci::Sub::Wrapper's wrap_sub() when
-        wrapping subroutines.
-
-        Some applications of this include: adding "timeout" or
-        "result_postfilter" properties to functions.
-
-    *   extra_wrapper_convert => HASH
-
-        If set, will be passed to Perinci::Sub::Wrapper wrap_sub()'s
-        "convert" argument when wrapping subroutines.
-
-        Some applications of this include: changing "default_lang" of
-        metadata.
-
-    *   use_tx => BOOL (default 0)
+    *   use_tx => BOOL (default: 0)
 
         Whether to allow transaction requests from client. Since this can
         cause the server to store transaction/undo data, this must be
@@ -182,14 +244,6 @@ METHODS
   $pa->request($action => $server_url, \%extra) => $res
     Process Riap request and return enveloped result. $server_url will be
     used as the Riap request key 'uri', as there is no server in this case.
-
-    Some notes:
-
-    *   Metadata returned by the 'meta' action has normalized schemas in
-        them
-
-        Schemas in metadata (like in the "args" and "return" property) are
-        normalized by Perinci::Sub::Wrapper.
 
   $pa->parse_url($server_url) => HASH
 FAQ

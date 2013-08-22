@@ -4,7 +4,7 @@
       "Steven Haryanto <stevenharyanto@gmail.com>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Dist::Zilla version 4.300035, CPAN::Meta::Converter version 2.132140",
+   "generated_by" : "Dist::Zilla version 4.300035, CPAN::Meta::Converter version 2.131560",
    "license" : [
       "perl_5"
    ],
@@ -37,7 +37,7 @@
             "Class::Inspector" : "0",
             "Log::Any" : "0",
             "Module::List" : "0",
-            "Perinci::Access::Base" : "0",
+            "Perinci::Access::Base" : "0.29",
             "Perinci::Object" : "0.11",
             "Perinci::Sub::Wrapper" : "0.34",
             "Progress::Any" : "0",
@@ -52,10 +52,8 @@
       },
       "test" : {
          "requires" : {
-            "Capture::Tiny" : "0",
             "Perinci::Examples" : "0.08",
-            "Test::More" : "0.96",
-            "blib" : "0"
+            "Test::More" : "0.96"
          }
       }
    },
@@ -66,6 +64,6 @@
          "url" : "http://github.com/sharyanto/perl-Perinci-Access-InProcess"
       }
    },
-   "version" : "0.42"
+   "version" : "0.43"
 }
 
