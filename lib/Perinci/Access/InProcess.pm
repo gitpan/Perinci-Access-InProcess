@@ -13,7 +13,7 @@ use SHARYANTO::ModuleOrPrefix::Path qw(module_or_prefix_path);
 use SHARYANTO::Package::Util qw(package_exists);
 use URI;
 
-our $VERSION = '0.44'; # VERSION
+our $VERSION = '0.45'; # VERSION
 
 our $re_perl_package =
     qr/\A[A-Za-z_][A-Za-z_0-9]*(::[A-Za-z_][A-Za-z_0-9]*)*\z/;
@@ -168,11 +168,7 @@ sub _load_module {
 
     my $pkg = $req->{-perl_package};
     # there is no module to load, or we are instructed not to load any modules.
-    return if !$pkg || !$self->{load};
-
-    # the problem is, if we load Foo::Bar, package Foo becomes exists even
-    # though we don't have module Foo.
-    #return if package_exists($pkg);
+    return if !$pkg || !$self->{load} || package_exists($pkg);
 
     my $module_p = $pkg;
     $module_p =~ s!::!/!g;
@@ -861,7 +857,7 @@ Perinci::Access::InProcess - Use Rinci access protocol (Riap) to access Perl cod
 
 =head1 VERSION
 
-version 0.44
+version 0.45
 
 =head1 SYNOPSIS
 
