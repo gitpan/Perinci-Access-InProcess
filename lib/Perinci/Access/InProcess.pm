@@ -13,7 +13,7 @@ use SHARYANTO::ModuleOrPrefix::Path qw(module_or_prefix_path);
 use SHARYANTO::Package::Util qw(package_exists);
 use URI;
 
-our $VERSION = '0.45'; # VERSION
+our $VERSION = '0.46'; # VERSION
 
 our $re_perl_package =
     qr/\A[A-Za-z_][A-Za-z_0-9]*(::[A-Za-z_][A-Za-z_0-9]*)*\z/;
@@ -120,22 +120,20 @@ sub _parse_uri {
     }
 
     my ($dir, $leaf, $perl_package);
-    if ($path eq '/') {
+    if ($path =~ m!\A/(.+)/+(.*)\z!) {
+        $dir  = $1;
+        $leaf = $2;
+    } elsif ($path =~ m!\A/+(.+)\z!) {
         $dir  = '/';
-        $leaf = '';
+        $leaf = $1;
     } else {
-        if ($path =~ m!(.+)/+(.*)!) {
-            $dir  = $1;
-            $leaf = $2;
-        } else {
-            $dir  = $path;
-            $leaf = '';
-        }
-        for ($perl_package) {
-            $_ = $dir;
-            s!^/+!!g;
-            s!/+!::!g;
-        }
+        $dir = '/';
+        $leaf = '';
+    }
+    for ($perl_package) {
+        $_ = $dir;
+        s!\A/+!!;
+        s!/+!::!g;
     }
     return [400, "Invalid uri"]
         if $perl_package && $perl_package !~ $re_perl_package;
@@ -432,16 +430,19 @@ sub action_list {
         }
     }
 
-    # ignore errors
-    $self->_load_module($req);
+    my $res = $self->_load_module($req);
+    # ignore missing modules
+    if ($res && $res->[0] != 404 && $res->[0] != 405) {
+        return $res;
+    }
 
     # get all entities from this module
     no strict 'refs';
     my $spec = \%{"$req->{-perl_package}\::SPEC"};
-    my $base = "/$req->{-perl_package}"; $base =~ s!::!/!g;
+    my $base = $req->{-uri_path};
     for (sort keys %$spec) {
         next if /^:/;
-        my $path = join("", $base, "/", $_);
+        my $path = join("", $base, $_);
         next unless $filter_path->($path);
         my $uri = "pl:$path";
         my $t = $_ =~ /^[%\@\$]/ ? 'variable' : 'function';
@@ -857,7 +858,7 @@ Perinci::Access::InProcess - Use Rinci access protocol (Riap) to access Perl cod
 
 =head1 VERSION
 
-version 0.45
+version 0.46
 
 =head1 SYNOPSIS
 
