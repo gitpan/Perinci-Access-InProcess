@@ -6,6 +6,8 @@ use warnings;
 use FindBin '$Bin';
 use lib "$Bin/lib";
 
+use File::Slurp;
+use File::Temp qw(tempdir);
 use Test::More 0.96;
 
 use Perinci::Access::InProcess;
@@ -17,6 +19,18 @@ package Foo;
 
 package Bar;
 our $VERSION = 0.123;
+
+our %SPEC;
+$SPEC{f1} = {v=>1.1, args=>{}};
+sub f1 { [200] }
+
+package Baz;
+our $VERSION = 0.124;
+
+our %SPEC;
+$SPEC{':package'} = {v=>1.1, entity_v=>9};
+$SPEC{f1} = {v=>1.1, entity_v=>10};
+sub f1 { [200] }
 
 package Test::Perinci::Access::InProcess;
 our %SPEC;
@@ -88,7 +102,7 @@ package main;
 my $var = 12;
 test_request(
     name => 'opt: after_load called',
-    object_opts=>{load=>1, after_load=>sub {$var++}},
+    object_opts=>{after_load=>sub {$var++}},
     req => [call => '/Perinci/Examples/noop'],
     status => 200,
     posttest => sub {
@@ -97,7 +111,7 @@ test_request(
 );
 test_request(
     name => 'opt: after_load not called twice',
-    object_opts=>{load=>1, after_load=>sub {$var++}},
+    object_opts=>{after_load=>sub {$var++}},
     req => [call => '/Perinci/Examples/noop'],
     status => 200,
     posttest => sub {
@@ -106,245 +120,400 @@ test_request(
 );
 # XXX test trapping of die in after_load
 
+subtest "failure in loading module" => sub {
+    local @INC = @INC;
+    my $tmpdir = tempdir(CLEANUP=>1);
+    unshift @INC, $tmpdir;
+    my $prefix = "M" . int(rand()*900_000_000+100_000_000);
+    my $prefix2;
+    while (1) {
+        $prefix2 = "M" . int(rand()*900_000_000+100_000_000);
+        last unless $prefix eq $prefix2;
+    }
+    mkdir "$tmpdir/$prefix";
+    write_file "$tmpdir/$prefix/OK.pm", "package $prefix\::OK; 1;";
+    write_file "$tmpdir/$prefix/Err.pm", "package $prefix\::Err; 1=;";
+    test_request(
+        name => "ok",
+        object_opts=>{}, # so it creates a new riap client and defeat cache
+        req => [meta => "/$prefix/OK/"],
+        status => 200,
+    );
+
+    test_request(
+        name => "missing module/prefix on actions",
+        object_opts=>{}, # so it creates a new riap client and defeat cache
+        req => [actions => "/$prefix2/"],
+        status => 404,
+    );
+    test_request(
+        name => "missing module/prefix is cached",
+        req => [actions => "/$prefix2/"],
+        status => 404,
+    );
+    test_request(
+        name => "missing module/prefix on list",
+        object_opts=>{}, # so it creates a new riap client and defeat cache
+        req => [list => "/$prefix2/"],
+        status => 404,
+    );
+    test_request(
+        name => "missing module/prefix on info",
+        object_opts=>{}, # so it creates a new riap client and defeat cache
+        req => [info => "/$prefix2/"],
+        status => 404,
+    );
+    test_request(
+        name => "missing module/prefix on meta",
+        object_opts=>{}, # so it creates a new riap client and defeat cache
+        req => [meta => "/$prefix2/"],
+        status => 404,
+    );
+
+    test_request(
+        name => "missing module but existing prefix is okay on actions",
+        object_opts=>{}, # so it creates a new riap client and defeat cache
+        req => [actions => "/$prefix/"],
+        status => 200,
+    );
+    test_request(
+        name => "missing module but existing prefix is okay on list",
+        object_opts=>{}, # so it creates a new riap client and defeat cache
+        req => [list => "/$prefix/"],
+        status => 200,
+        result => ["pl:/$prefix/Err/", "pl:/$prefix/OK/"],
+    );
+    test_request(
+        name => "missing module but existing prefix is okay on info",
+        object_opts=>{}, # so it creates a new riap client and defeat cache
+        req => [info => "/$prefix/"],
+        status => 200,
+    );
+    test_request(
+        name => "missing module but existing prefix is okay on meta",
+        object_opts=>{}, # so it creates a new riap client and defeat cache
+        req => [meta => "/$prefix/"],
+        status => 200,
+    );
+
+    test_request(
+        name => "missing function on meta (1)",
+        object_opts=>{}, # so it creates a new riap client and defeat cache
+        req => [meta => "/$prefix/foo"],
+        status => 404,
+    );
+    test_request(
+        name => "missing function on meta (2)",
+        object_opts=>{}, # so it creates a new riap client and defeat cache
+        req => [meta => "/$prefix/OK/foo"],
+        status => 404,
+    );
+
+    test_request(
+        name => "compile error in module on actions",
+        object_opts=>{}, # so it creates a new riap client and defeat cache
+        req => [actions => "/$prefix/Err/"],
+        status => 500,
+    );
+    test_request(
+        name => "compile error in module is cached",
+        req => [actions => "/$prefix/Err/"],
+        status => 500,
+    );
+};
+
 test_request(
     name => 'unknown action',
     req => [zzz => "/"],
     status => 502,
 );
 test_request(
-    name => 'unknown action for a type',
+    name => 'unknown action for a type (1)',
     req => [call => "/"],
     status => 502,
 );
 test_request(
-    req => [info => "/"],
-    status => 200,
-    result => { type => "package", uri => "/", v => 1.1 },
-);
-test_request(
-    name => 'pl: uri scheme',
-    req => [info => "pl:/"],
-    status => 200,
-    result => { type => "package", uri => "pl:/", v => 1.1 },
-);
-test_request(
-    name => 'meta on / works',
-    req => [meta => "pl:/"],
-    status => 200,
-);
-test_request(
-    name => 'meta on package',
-    req => [meta => "/Test/Perinci/Access/InProcess/"],
-    status => 200,
-    result => { summary => "A package",
-                v => 1.1,
-                entity_version => $Test::Perinci::Access::InProcess::VERSION },
-);
-test_request(
-    name => 'meta on package (default meta)',
-    req => [meta => "/Foo/"],
-    status => 200,
-    result => { v => 1.1 },
-);
-test_request(
-    name => 'meta on package (default meta + version)',
-    req => [meta => "/Bar/"],
-    status => 200,
-    result => { v => 1.1, entity_version => 0.123 },
-);
-test_request(
-    name => 'ending slash matters',
-    req => [meta => "/Perinci/Examples"],
-    status => 404,
+    name => 'unknown action for a type (2)',
+    req => [list => "/foo"],
+    status => 502,
 );
 
-test_request(
-    name => 'meta on function',
-    req => [meta => "/Perinci/Examples/test_completion"],
-    status => 200,
-    posttest => sub {},
-);
+subtest "opt: allow_paths & deny_paths" => sub {
+    test_request(
+        name => 'allow_paths',
+        object_opts => {allow_paths=>qr!^/foo!},
+        req => [meta => "/Perinci/Examples/"],
+        status => 403,
+    );
+    test_request(
+        name => 'allow_paths on list',
+        object_opts => {allow_paths=>qr!^/Perinci/Examples/([c]|$)!},
+        req => [list => "/Perinci/Examples/"],
+        status => 200,
+        posttest => sub {
+            my ($res) = @_;
+            ok(@{$res->[2]} <= 3, "number of results"); # call_gen_array, call_randlog
+        },
+    );
+    test_request(
+        name => 'deny_paths 1',
+        object_opts => {deny_paths=>qr!^/foo!},
+        req => [meta => "/Perinci/Examples/"],
+        status => 200,
+    );
+    test_request(
+        name => 'deny_paths 2',
+        object_opts => {deny_paths=>qr!^/P!},
+        req => [meta => "/Perinci/Examples/"],
+        status => 403,
+    );
+    test_request(
+        name => 'deny_paths on list',
+        object_opts => {deny_paths=>qr!^/Perinci/Examples/[^c]!},
+        req => [list => "/Perinci/Examples/"],
+        status => 200,
+        posttest => sub {
+            my ($res) = @_;
+            ok(@{$res->[2]} <= 3, "number of results"); # call_gen_array, call_randlog
+        },
+    );
+};
 
-test_request(
-    name => 'actions on package',
-    req => [actions => "/Perinci/Examples/"],
-    status => 200,
-    result => [qw/actions begin_tx child_metas commit_tx discard_all_txs discard_tx info list list_txs meta redo release_tx_savepoint rollback_tx savepoint_tx undo/],
-);
-test_request(
-    name => 'actions on function',
-    req => [actions => "/Perinci/Examples/gen_array"],
-    status => 200,
-    result => [qw/actions begin_tx call commit_tx complete_arg_val discard_all_txs discard_tx info list_txs meta redo release_tx_savepoint rollback_tx savepoint_tx undo/],
-);
-test_request(
-    name => 'actions on variable',
-    req => [actions => "/Perinci/Examples/\$Var1"],
-    status => 200,
-    result => [qw/actions begin_tx commit_tx discard_all_txs discard_tx get info list_txs meta redo release_tx_savepoint rollback_tx savepoint_tx undo/],
-);
-# XXX actions: detail
+subtest "action: info" => sub {
+    test_request(
+        name => "info on / works",
+        req => [info => "/"],
+        status => 200,
+        result => {v=>1.1, uri=>"/", type=>"package"}, # not becomes pl:/ ?
+    );
+    test_request(
+        name => 'pl: uri scheme',
+        req => [info => "pl:/"],
+        status => 200,
+        result => {v=>1.1, type=>"package", uri=>"pl:/"},
+    );
+    test_request(
+        name => 'info on package',
+        req => [info => "/Foo/"],
+        status => 200,
+        result => {v=>1.1, uri=>'/Foo/', type=>'package'},
+    );
+    test_request(
+        name => 'info on function',
+        req => [info => "/Baz/f1"],
+        status => 200,
+        result => {v=>1.1, uri=>'/Baz/f1', type=>'function'},
+    );
+};
 
-test_request(
-    name => 'list action 1',
-    req => [list => "/Perinci/Examples/"],
-    status => 200,
-    posttest => sub {
-        my ($res) = @_;
-        ok(@{$res->[2]} > 5, "number of results"); # safe number
-        ok(!ref($res->[2][0]), "record is scalar");
-    },
-);
-test_request(
-    name => 'list action: detail',
-    req => [list => "/Perinci/Examples/", {detail=>1}],
-    status => 200,
-    posttest => sub {
-        my ($res) = @_;
-        ok(@{$res->[2]} > 5, "number of results");
-        is(ref($res->[2][0]), 'HASH', "record is hash");
-    },
-);
-test_request(
-    name => 'opt: allow_paths',
-    object_opts => {allow_paths=>qr!^/foo!},
-    req => [meta => "/Perinci/Examples/"],
-    status => 403,
-);
-test_request(
-    name => 'opt: allow_paths on list',
-    object_opts => {allow_paths=>qr!^/Perinci/Examples/([c]|$)!},
-    req => [list => "/Perinci/Examples/"],
-    status => 200,
-    posttest => sub {
-        my ($res) = @_;
-        ok(@{$res->[2]} <= 3, "number of results"); # call_gen_array, call_randlog
-    },
-);
-test_request(
-    name => 'opt: deny_paths 1',
-    object_opts => {deny_paths=>qr!^/foo!},
-    req => [meta => "/Perinci/Examples/"],
-    status => 200,
-);
-test_request(
-    name => 'opt: deny_paths 2',
-    object_opts => {deny_paths=>qr!^/P!},
-    req => [meta => "/Perinci/Examples/"],
-    status => 403,
-);
-test_request(
-    name => 'opt: deny_paths on list',
-    object_opts => {deny_paths=>qr!^/Perinci/Examples/[^c]!},
-    req => [list => "/Perinci/Examples/"],
-    status => 200,
-    posttest => sub {
-        my ($res) = @_;
-        ok(@{$res->[2]} <= 3, "number of results"); # call_gen_array, call_randlog
-    },
-);
-# XXX list: type
+subtest "action: meta" => sub {
+    test_request(
+        name => 'meta on / works',
+        req => [meta => "pl:/"],
+        status => 200,
+    );
+    test_request(
+        name => 'meta on package',
+        req => [meta => "/Test/Perinci/Access/InProcess/"],
+        status => 200,
+        result => { summary => "A package",
+                    v => 1.1,
+                    entity_v => $Test::Perinci::Access::InProcess::VERSION },
+    );
+    test_request(
+        name => 'meta on package (default meta, no VERSION)',
+        req => [meta => "/Foo/"],
+        status => 200,
+        result => { v => 1.1 },
+    );
+    test_request(
+        name => 'meta on package (default meta, entity_v from VERSION)',
+        req => [meta => "/Bar/"],
+        status => 200,
+        result => { v => 1.1, entity_v => 0.123 },
+    );
+    test_request(
+        name => 'meta on function (entity_v from VERSION)',
+        object_opts=>{wrap=>0},
+        req => [meta => "/Bar/f1"],
+        status => 200,
+        result => {v=>1.1, args=>{}, entity_v => 0.123},
+    );
+    test_request(
+        name => 'meta on package (entity_v not overriden)',
+        object_opts=>{wrap=>0},
+        req => [meta => "/Baz/"],
+        status => 200,
+        result => {v=>1.1, entity_v=>9},
+    );
+    test_request(
+        name => 'meta on function (entity_v not overriden)',
+        object_opts=>{wrap=>0},
+        req => [meta => "/Baz/f1"],
+        status => 200,
+        result => {v=>1.1, entity_v=>10},
+    );
+    test_request(
+        name => 'ending slash matters',
+        req => [meta => "/Perinci/Examples"],
+        status => 404,
+    );
+};
 
-test_request(
-    name => 'call 1',
-    req => [call => "/Perinci/Examples/gen_array", {args=>{len=>1}}],
-    status => 200,
-    result => [1],
-);
-test_request(
-    name => 'call: die trapped by wrapper',
-    req => [call => "/Perinci/Examples/dies"],
-    status => 500,
-);
-# XXX call: invalid args
+subtest "action: actions" => sub {
+    test_request(
+        name => 'actions on package',
+        req => [actions => "/Perinci/Examples/"],
+        status => 200,
+        result => [qw/actions begin_tx child_metas commit_tx discard_all_txs
+                      discard_tx info list list_txs meta redo
+                      release_tx_savepoint rollback_tx savepoint_tx undo/],
+    );
+    test_request(
+        name => 'actions on function',
+        req => [actions => "/Perinci/Examples/gen_array"],
+        status => 200,
+        result => [qw/actions begin_tx call commit_tx complete_arg_val
+                      discard_all_txs discard_tx info list_txs meta redo
+                      release_tx_savepoint rollback_tx savepoint_tx undo/],
+    );
+    test_request(
+        name => 'actions on variable',
+        req => [actions => "/Perinci/Examples/\$Var1"],
+        status => 200,
+        result => [qw/actions begin_tx commit_tx discard_all_txs discard_tx get
+                      info list_txs meta redo release_tx_savepoint rollback_tx
+                      savepoint_tx undo/],
+    );
+    # XXX actions: detail
+};
 
-test_request(
-    name => 'call: confirm (w/o)',
-    req => [call => "/Test/Perinci/Access/InProcess/req_confirm",
-            {}],
-    status => 331,
-);
-test_request(
-    name => 'call: confirm (w/)',
-    req => [call => "/Test/Perinci/Access/InProcess/req_confirm",
-            {confirm=>1}],
-    status => 200,
-);
+subtest "action: list" => sub {
+    test_request(
+        name => 'default',
+        req => [list => "/Perinci/Examples/"],
+        status => 200,
+        posttest => sub {
+            my ($res) = @_;
+            ok(@{$res->[2]} > 5, "number of results"); # safe number
+            ok(!ref($res->[2][0]), "record is scalar");
+        },
+    );
+    test_request(
+        name => 'opt: detail',
+        req => [list => "/Perinci/Examples/", {detail=>1}],
+        status => 200,
+        posttest => sub {
+            my ($res) = @_;
+            ok(@{$res->[2]} > 5, "number of results");
+            is(ref($res->[2][0]), 'HASH', "record is hash");
+        },
+    );
+    # XXX opt: type
+};
 
-test_request(
-    name => 'call: dry_run to function that cannot do dry run -> 412',
-    req => [call => "/Test/Perinci/Access/InProcess/f1",
-            {dry_run=>1}],
-    status => 412,
-);
-test_request(
-    name => 'call: dry_run (using dry_run) (w/o)',
-    req => [call => "/Test/Perinci/Access/InProcess/dry_run",
-            {}],
-    status => 200,
-    result => 2,
-);
-test_request(
-    name => 'call: dry_run (using dry_run) (w/)',
-    req => [call => "/Test/Perinci/Access/InProcess/dry_run",
-            {dry_run=>1}],
-    status => 200,
-    result => 1,
-);
-test_request(
-    name => 'call: dry_run (using tx) (w/o)',
-    req => [call => "/Test/Perinci/Access/InProcess/tx",
-            {}],
-    status => 200,
-    result => 2,
-);
-test_request(
-    name => 'call: dry_run (using tx) (w/)',
-    req => [call => "/Test/Perinci/Access/InProcess/tx",
-            {dry_run=>1}],
-    status => 200,
-    result => 1,
-);
+subtest "action: call" => sub {
+    test_request(
+        name => 'call 1',
+        req => [call => "/Perinci/Examples/gen_array", {args=>{len=>1}}],
+        status => 200,
+        result => [1],
+    );
+    test_request(
+        name => 'call: die trapped by wrapper',
+        req => [call => "/Perinci/Examples/dies"],
+        status => 500,
+    );
+    # XXX call: invalid args
+    test_request(
+        name => 'call: confirm (w/o)',
+        req => [call => "/Test/Perinci/Access/InProcess/req_confirm",
+                {}],
+        status => 331,
+    );
+    test_request(
+        name => 'call: confirm (w/)',
+        req => [call => "/Test/Perinci/Access/InProcess/req_confirm",
+                {confirm=>1}],
+        status => 200,
+    );
+    test_request(
+        name => 'call: dry_run to function that cannot do dry run -> 412',
+        req => [call => "/Test/Perinci/Access/InProcess/f1",
+                {dry_run=>1}],
+        status => 412,
+    );
+    test_request(
+        name => 'call: dry_run (using dry_run) (w/o)',
+        req => [call => "/Test/Perinci/Access/InProcess/dry_run",
+                {}],
+        status => 200,
+        result => 2,
+    );
+    test_request(
+        name => 'call: dry_run (using dry_run) (w/)',
+        req => [call => "/Test/Perinci/Access/InProcess/dry_run",
+                {dry_run=>1}],
+        status => 200,
+        result => 1,
+    );
+    test_request(
+        name => 'call: dry_run (using tx) (w/o)',
+        req => [call => "/Test/Perinci/Access/InProcess/tx",
+                {}],
+        status => 200,
+        result => 2,
+    );
+    test_request(
+        name => 'call: dry_run (using tx) (w/)',
+        req => [call => "/Test/Perinci/Access/InProcess/tx",
+                {dry_run=>1}],
+        status => 200,
+        result => 1,
+    );
+};
 
-test_request(
-    name => 'complete_arg_val: missing arg',
-    req => [complete_arg_val => "/Perinci/Examples/test_completion", {}],
-    status => 400,
-);
-test_request(
-    name => 'complete: str\'s in',
-    req => [complete_arg_val => "/Perinci/Examples/test_completion",
-            {arg=>"s1", word=>"r"}],
-    status => 200,
-    result => ["red date", "red grape"],
-);
-test_request(
-    name => 'complete: int\'s min+max',
-    req => [complete_arg_val => "/Perinci/Examples/test_completion",
-            {arg=>"i1", word=>"1"}],
-    status => 200,
-    result => [1, 10..19],
-);
-test_request(
-    name => 'complete: int\'s min+max range too big = not completed',
-    req => [complete_arg_val => "/Perinci/Examples/test_completion",
-            {arg=>"i2", word=>"1"}],
-    status => 200,
-    result => [],
-);
-test_request(
-    name => 'complete: sub',
-    req => [complete_arg_val => "/Perinci/Examples/test_completion",
-            {arg=>"s2", word=>"z"}],
-    status => 200,
-    result => ["za".."zz"],
-);
-test_request(
-    name => 'complete: sub die trapped',
-    req => [complete_arg_val => "/Perinci/Examples/test_completion",
-            {arg=>"s3"}],
-    status => 500,
-);
+subtest "action: complete_arg_val" => sub {
+    test_request(
+        name => 'complete_arg_val: missing arg',
+        req => [complete_arg_val => "/Perinci/Examples/test_completion", {}],
+        status => 400,
+    );
+    test_request(
+        name => 'complete: str\'s in',
+        req => [complete_arg_val => "/Perinci/Examples/test_completion",
+                {arg=>"s1", word=>"r"}],
+        status => 200,
+        result => ["red date", "red grape"],
+    );
+    test_request(
+        name => 'complete: int\'s min+max',
+        req => [complete_arg_val => "/Perinci/Examples/test_completion",
+                {arg=>"i1", word=>"1"}],
+        status => 200,
+        result => [1, 10..19],
+    );
+    test_request(
+        name => 'complete: int\'s min+max range too big = not completed',
+        req => [complete_arg_val => "/Perinci/Examples/test_completion",
+                {arg=>"i2", word=>"1"}],
+        status => 200,
+        result => [],
+    );
+    test_request(
+        name => 'complete: sub',
+        req => [complete_arg_val => "/Perinci/Examples/test_completion",
+                {arg=>"s2", word=>"z"}],
+        status => 200,
+        result => ["za".."zz"],
+    );
+    test_request(
+        name => 'complete: sub die trapped',
+        req => [complete_arg_val => "/Perinci/Examples/test_completion",
+                {arg=>"s3"}],
+        status => 500,
+    );
+};
 
 test_request(
     name => 'opt: load=1 (will still try accessing the package anyway)',
@@ -367,13 +536,13 @@ test_request(
         },
         result_naked=>0,
         args_as=>'hash',
-        entity_version=>1.2,
+        entity_v=>1.2,
         features=>{},
     },
 );
 
 test_request(
-    name => 'child_metas action',
+    name => 'action: child_metas',
     req => [child_metas => '/Test/Perinci/Access/InProcess/'],
     status => 200,
     result => {
@@ -381,7 +550,7 @@ test_request(
             {
                 v=>1.1,
                 summary=>"A variable",
-                entity_version=>1.2,
+                entity_v=>1.2,
             },
         'pl:/Test/Perinci/Access/InProcess/f1' =>
             {
@@ -394,34 +563,34 @@ test_request(
                     schema => ['int'=>{req=>1}, {}],
                 },
                 args_as => 'hash', result_naked => 0,
-                entity_version=>1.2,
+                entity_v=>1.2,
                 features=>{},
             },
         'pl:/Test/Perinci/Access/InProcess/f2' =>
             {
                 v=>1.1,
                 args_as => 'hash', result_naked => 0,
-                entity_version=>1.2,
+                entity_v=>1.2,
             },
         'pl:/Test/Perinci/Access/InProcess/req_confirm' =>
             {
                 v=>1.1,
                 args_as => 'hash', result_naked => 0,
-                entity_version=>1.2,
+                entity_v=>1.2,
                 features=>{},
             },
         'pl:/Test/Perinci/Access/InProcess/dry_run' =>
             {
                 v=>1.1,
                 args_as => 'hash', result_naked => 0,
-                entity_version=>1.2,
+                entity_v=>1.2,
                 features => {dry_run=>1},
             },
         'pl:/Test/Perinci/Access/InProcess/tx' =>
             {
                 v=>1.1,
                 args_as => 'hash', result_naked => 0,
-                entity_version=>1.2,
+                entity_v=>1.2,
                 features => {tx=>{v=>2}, idempotent=>1},
             },
     },
@@ -429,7 +598,7 @@ test_request(
 
 test_request(
     name => 'opt: extra_wrapper_args',
-    object_opts=>{load=>0, extra_wrapper_args=>{remove_internal_properties=>0}},
+    object_opts=>{extra_wrapper_args=>{remove_internal_properties=>0}},
     req => [meta => '/Test/Perinci/Access/InProcess/f1'],
     status => 200,
     posttest => sub {
@@ -441,7 +610,7 @@ test_request(
 );
 test_request(
     name => 'opt: extra_wrapper_convert',
-    object_opts=>{load=>0, extra_wrapper_convert=>{default_lang=>"id_ID"}},
+    object_opts=>{extra_wrapper_convert=>{default_lang=>"id_ID"}},
     req => [meta => '/Test/Perinci/Access/InProcess/f1'],
     status => 200,
     posttest => sub {
@@ -469,13 +638,13 @@ test_request(
 
 test_request(
     name => 'opt: wrap=0',
-    object_opts=>{load=>0, wrap=>0},
+    object_opts=>{wrap=>0},
     req => [call => '/Test/Perinci/Access/InProcess2/test_uws', {args=>{x=>1}}],
     status => 200,
 );
 test_request(
     name => 'opt: wrap=1 (the default)',
-    object_opts=>{load=>0},
+    object_opts=>{},
     req => [call => '/Test/Perinci/Access/InProcess2/test_uws', {args=>{x=>1}}],
     status => 400,
 );
@@ -495,6 +664,8 @@ subtest "parse_url" => sub {
 DONE_TESTING:
 done_testing();
 
+# riap client uses one from last test, unless object_opts is specified where it
+# will create a new object.
 sub test_request {
     my %args = @_;
     my $req = $args{req};
@@ -505,7 +676,7 @@ sub test_request {
             $pa = Perinci::Access::InProcess->new(%{$args{object_opts}});
         } else {
             unless ($pa_cached) {
-                $pa_cached = Perinci::Access::InProcess->new(load=>0);
+                $pa_cached = Perinci::Access::InProcess->new();
             }
             $pa = $pa_cached;
         }

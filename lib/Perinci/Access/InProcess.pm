@@ -11,9 +11,10 @@ use Perinci::Object;
 use Scalar::Util qw(blessed reftype);
 use SHARYANTO::ModuleOrPrefix::Path qw(module_or_prefix_path);
 use SHARYANTO::Package::Util qw(package_exists);
+use Tie::Cache;
 use URI;
 
-our $VERSION = '0.46'; # VERSION
+our $VERSION = '0.47'; # VERSION
 
 our $re_perl_package =
     qr/\A[A-Za-z_][A-Za-z_0-9]*(::[A-Za-z_][A-Za-z_0-9]*)*\z/;
@@ -80,7 +81,6 @@ sub new {
 
     # to cache wrapped result
     if ($self->{cache_size}) {
-        require Tie::Cache;
         tie my(%cache), 'Tie::Cache', $self->{cache_size};
         $self->{_cache} = \%cache;
     } else {
@@ -158,34 +158,48 @@ sub _parse_uri {
     return;
 }
 
-# TODO: make it Tie::Cache with expiry
-my %negcache; # key = module_p, val = error resp
+# key = module_p, val = error resp or undef if successful
+my %loadcache;
+tie %loadcache, 'Tie::Cache', 200;
 
 sub _load_module {
     my ($self, $req) = @_;
 
     my $pkg = $req->{-perl_package};
+
     # there is no module to load, or we are instructed not to load any modules.
-    return if !$pkg || !$self->{load} || package_exists($pkg);
+    return if !$pkg || !$self->{load};
 
     my $module_p = $pkg;
     $module_p =~ s!::!/!g;
     $module_p .= ".pm";
 
-    # module has been loaded before
-    return if exists($INC{$module_p});
+    # module has been required before and successfully loaded
+    return if $INC{$module_p};
 
-    # use (negative) cache result
-    return $negcache{$module_p} if exists $negcache{$module_p};
+    # module has been required before and failed
+    return [500, "Module $pkg has failed to load previously"]
+        if exists($INC{$module_p});
+
+    # use cache result (for caching errors, or packages like 'main' and 'CORE'
+    # where no modules for such packages exist)
+    return $loadcache{$module_p} if exists $loadcache{$module_p};
 
     # load and cache negative result
     my $res;
     {
         my $fullpath = module_or_prefix_path($module_p);
+
+        # when the module path does not exist, but the package does, we can
+        # ignore this error. for example: main, CORE, etc.
+        my $pkg_exists = package_exists($pkg);
+
         if (!$fullpath) {
+            last if $pkg_exists;
             $res = [404, "Can't find module or prefix path for package $pkg"];
             last;
         } elsif ($fullpath !~ /\.pm$/) {
+            last if $pkg_exists;
             $res = [405, "Can only find a prefix path for package $pkg"];
             last;
         }
@@ -200,7 +214,7 @@ sub _load_module {
             $log->error("after_load for package $pkg dies: $@") if $@;
         }
     }
-    $negcache{$module_p} = $res if $res;
+    $loadcache{$module_p} = $res;
     return $res;
 }
 
@@ -210,21 +224,23 @@ sub _get_code_and_meta {
     no strict 'refs';
     my ($self, $req) = @_;
     my $name = $req->{-perl_package} . "::" . $req->{-uri_leaf};
+    my $type = $req->{-type};
     return [200, "OK (cached)", $self->{_cache}{$name}]
         if $self->{_cache}{$name};
 
     my $res = $self->_load_module($req);
-    return $res if $res;
+    # missing module (but existing prefix) is okay for package, we construct an
+    # empty package metadata for it
+    return $res if $res && !($type eq 'package' && $res->[0] == 405);
 
     no strict 'refs';
     my $metas = \%{"$req->{-perl_package}::SPEC"};
     my $meta = $metas->{ $req->{-uri_leaf} || ":package" };
 
-    # supply a default, empty metadata for package, just so we can put $VERSION
-    # into it
-    if (!$meta && $req->{-type} eq 'package') {
+    if (!$meta && $type eq 'package') {
         $meta = {v=>1.1};
     }
+
     return [404, "No metadata for $name"] unless $meta;
 
     my $code;
@@ -257,10 +273,10 @@ sub _get_code_and_meta {
         $self->{_cache}{$name} = [$code, $meta, $extra]
             if $self->{cache_size};
     }
-    unless (defined $meta->{entity_version}) {
+    unless (defined $meta->{entity_v}) {
         my $ver = ${ $req->{-perl_package} . "::VERSION" };
         if (defined $ver) {
-            $meta->{entity_version} = $ver;
+            $meta->{entity_v} = $ver;
         }
     }
     [200, "OK", [$code, $meta, $extra]];
@@ -342,17 +358,16 @@ sub actionmeta_info { +{
 
 sub action_info {
     my ($self, $req) = @_;
+
+    my $mres = $self->get_meta($req);
+    return $mres if $mres;
+
     my $res = {
         v    => 1.1,
         uri  => $req->{uri}->as_string,
         type => $req->{-type},
     };
-    if ($req->{-type} eq 'package' && $req->{-perl_package}) {
-        my $res2 = $self->_load_module($req);
-        return $res2 if $res2;
-        no strict 'refs';
-        $res->{entity_version} //= ${ "$req->{-perl_package}\::VERSION" };
-    }
+
     [200, "OK", $res];
 }
 
@@ -365,6 +380,10 @@ sub actionmeta_actions { +{
 
 sub action_actions {
     my ($self, $req) = @_;
+
+    my $mres = $self->get_meta($req);
+    return $mres if $mres;
+
     my @res;
     for my $k (sort keys %{ $self->{_typeacts}{$req->{-type}} }) {
         my $v = $self->{_typeacts}{$req->{-type}}{$k};
@@ -431,10 +450,7 @@ sub action_list {
     }
 
     my $res = $self->_load_module($req);
-    # ignore missing modules
-    if ($res && $res->[0] != 404 && $res->[0] != 405) {
-        return $res;
-    }
+    return $res if $res && $res->[0] != 405;
 
     # get all entities from this module
     no strict 'refs';
@@ -858,7 +874,7 @@ Perinci::Access::InProcess - Use Rinci access protocol (Riap) to access Perl cod
 
 =head1 VERSION
 
-version 0.46
+version 0.47
 
 =head1 SYNOPSIS
 

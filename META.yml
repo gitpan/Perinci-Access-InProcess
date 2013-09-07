@@ -4,6 +4,7 @@ author:
   - 'Steven Haryanto <stevenharyanto@gmail.com>'
 build_requires:
   Capture::Tiny: 0
+  File::Slurp: 0
   Module::Build: 0.3601
   Perinci::Examples: 0.08
   Test::More: 0.96
@@ -23,10 +24,10 @@ requires:
   Module::List: 0
   Perinci::Access::Base: 0.29
   Perinci::Object: 0.11
-  Perinci::Sub::Wrapper: 0.34
+  Perinci::Sub::Wrapper: 0.45
   Progress::Any: 0
   Riap: v1.1.19
-  Rinci: v1.1.31
+  Rinci: v1.1.36
   SHARYANTO::ModuleOrPrefix::Path: 0
   SHARYANTO::Package::Util: 0
   Tie::Cache: 0
@@ -36,4 +37,4 @@ requires:
 resources:
   homepage: http://metacpan.org/release/Perinci-Access-InProcess
   repository: http://github.com/sharyanto/perl-Perinci-Access-InProcess
-version: 0.46
+version: 0.47
